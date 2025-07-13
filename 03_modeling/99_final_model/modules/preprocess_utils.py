@@ -514,3 +514,18 @@ def fast_vif_cleaner(X, vif_threshold=100.0, remove_high_vif=True, verbose=True)
     final_vif = compute_vif(X_scaled)
 
     return X_scaled, removed_cols, final_vif
+
+def get_clean_numeric_columns(df, columns):
+    """
+    숫자형이고 1차원인 컬럼만 필터링
+    """
+    clean_cols = []
+    for col in columns:
+        try:
+            if pd.api.types.is_numeric_dtype(df[col]) and df[col].ndim == 1:
+                clean_cols.append(col)
+            else:
+                print(f"❌ 제외됨: '{col}' (ndim={df[col].ndim}, dtype={df[col].dtypes})")
+        except Exception as e:
+            print(f"⚠️ 오류 발생: {col}, error = {e}")
+    return clean_cols
