@@ -68,6 +68,22 @@ def predict_proba_on_fixed_val(X_train, y_train, X_val, features):
 def safe_div(a, b):
     return np.where(b == 0, 0, a / b)
 
+# 라벨인코딩
+def encode_categorical_columns(df):
+    cat_cols = df.select_dtypes(include='object').columns.tolist()
+    for col in cat_cols:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        print(f"🔵 {col} 인코딩 완료")
+    return df
+
+# 결측치 처리 (평균)
+def impute_missing_values(df, strategy='mean'):
+    imputer = SimpleImputer(strategy=strategy)
+    df_imputed = pd.DataFrame(imputer.fit_transform(df), columns=df.columns)
+    print(f"✅ 결측치 처리 완료 (strategy={strategy})")
+    return df_imputed
+
 # 범주화 전처리
 def map_categorical_columns(df, verbose=True):
     """

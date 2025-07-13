@@ -5,64 +5,108 @@ import pandas as pd
 
 # 나눗셈 함수
 def safe_div(a, b):
-    return np.where(b == 0, 0, a / b)
+    return np.where(b != 0, a / b, 0)
 
 # CD 파생변수 생성
 def generate_cd_derived_features(df):
     """
     CD 관련 파생변수 생성
+    컬럼이 존재하지 않으면 해당 파생변수는 생성하지 않음
     """
     df = df.copy()
 
-    # 파생 변수 생성
-    df['오프라인_소비급등비율'] = safe_div(df['이용금액_오프라인_B0M'], df['이용금액_오프라인_R6M'] / 6)
-    df['일시불_최근성지표'] = safe_div(df['이용금액_일시불_B0M'], df['최대이용금액_일시불_R12M'] + 1)
-    df['소비_평균대최대비율'] = safe_div((df['이용금액_R3M_신용'] + 1) / 3, df['최대이용금액_일시불_R12M'] + 1)
-    df['청구_최근성지표'] = safe_div(df['정상청구원금_B0M'], df['정상청구원금_B5M'] + 1)
-    df['소진율_차이'] = df['잔액_신판평균한도소진율_r6m'] - df['잔액_신판ca평균한도소진율_r6m']
-    df['카드집중도'] = safe_div(df['_1순위카드이용금액'], df['이용금액_R3M_신용'] + df['이용금액_R3M_신용체크'] + 1)
-    df['입금청구비율'] = safe_div(df['정상입금원금_B5M'], df['정상청구원금_B5M'] + 1)
-    df['일시불_금액비율'] = safe_div(df['이용금액_일시불_B0M'], df['평잔_일시불_6M'] + 1)
-    df['할인전이자율_평균'] = (df['RV일시불이자율_할인전'] + df['CA이자율_할인전']) / 2
+    # 안전한 나눗셈 함수
+    def safe_div(a, b):
+        return np.where(b != 0, a / b, 0)
+
+    # 각 파생변수 생성 전 컬럼 존재 여부 확인
+    if {'이용금액_오프라인_B0M', '이용금액_오프라인_R6M'}.issubset(df.columns):
+        df['오프라인_소비급등비율'] = safe_div(df['이용금액_오프라인_B0M'], df['이용금액_오프라인_R6M'] / 6)
+
+    if {'이용금액_일시불_B0M', '최대이용금액_일시불_R12M'}.issubset(df.columns):
+        df['일시불_최근성지표'] = safe_div(df['이용금액_일시불_B0M'], df['최대이용금액_일시불_R12M'] + 1)
+
+    if {'이용금액_R3M_신용', '최대이용금액_일시불_R12M'}.issubset(df.columns):
+        df['소비_평균대최대비율'] = safe_div((df['이용금액_R3M_신용'] + 1) / 3, df['최대이용금액_일시불_R12M'] + 1)
+
+    if {'정상청구원금_B0M', '정상청구원금_B5M'}.issubset(df.columns):
+        df['청구_최근성지표'] = safe_div(df['정상청구원금_B0M'], df['정상청구원금_B5M'] + 1)
+
+    if {'잔액_신판평균한도소진율_r6m', '잔액_신판ca평균한도소진율_r6m'}.issubset(df.columns):
+        df['소진율_차이'] = df['잔액_신판평균한도소진율_r6m'] - df['잔액_신판ca평균한도소진율_r6m']
+
+    if {'_1순위카드이용금액', '이용금액_R3M_신용', '이용금액_R3M_신용체크'}.issubset(df.columns):
+        df['카드집중도'] = safe_div(df['_1순위카드이용금액'], df['이용금액_R3M_신용'] + df['이용금액_R3M_신용체크'] + 1)
+
+    if {'정상입금원금_B5M', '정상청구원금_B5M'}.issubset(df.columns):
+        df['입금청구비율'] = safe_div(df['정상입금원금_B5M'], df['정상청구원금_B5M'] + 1)
+
+    if {'이용금액_일시불_B0M', '평잔_일시불_6M'}.issubset(df.columns):
+        df['일시불_금액비율'] = safe_div(df['이용금액_일시불_B0M'], df['평잔_일시불_6M'] + 1)
+
+    if {'RV일시불이자율_할인전', 'CA이자율_할인전'}.issubset(df.columns):
+        df['할인전이자율_평균'] = (df['RV일시불이자율_할인전'] + df['CA이자율_할인전']) / 2
 
     return df
 
-# E 파생변수 생성
+
 def generate_e_features(df):
     """
     E 관련 추가 파생변수 생성 (상관계수 및 핵심 피처 기반)
+    - 컬럼 존재 여부 체크 후 생성 (KeyError 방지)
     """
     df = df.copy()
+
     # ▶ 신용카드 이용량 변화
-    df['신용이용건수_증가량'] = df['이용건수_신용_R12M'] - df['이용건수_신용_R6M']
+    if '이용건수_신용_R12M' in df.columns and '이용건수_신용_R6M' in df.columns:
+        df['신용이용건수_증가량'] = df['이용건수_신용_R12M'] - df['이용건수_신용_R6M']
+
     # ▶ 최근 일시불 집중 비율
-    df['일시불이용금액_최근비중'] = safe_div(df['이용금액_일시불_B0M'], df['이용금액_일시불_R6M'] + 1)
+    if '이용금액_일시불_B0M' in df.columns and '이용금액_일시불_R6M' in df.columns:
+        df['일시불이용금액_최근비중'] = safe_div(df['이용금액_일시불_B0M'], df['이용금액_일시불_R6M'] + 1)
+
     # ▶ 카드론 의존도
-    df['카드론_의존도'] = safe_div(df['잔액_카드론_B0M'], df['평잔_카드론_6M'] + 1)
+    if '잔액_카드론_B0M' in df.columns and '평잔_카드론_6M' in df.columns:
+        df['카드론_의존도'] = safe_div(df['잔액_카드론_B0M'], df['평잔_카드론_6M'] + 1)
+
     # ▶ 카드론 최근 급증 지표
-    df['카드론_급증지표'] = df['잔액_카드론_B0M'] - df['잔액_카드론_B3M']
+    if '잔액_카드론_B0M' in df.columns and '잔액_카드론_B3M' in df.columns:
+        df['카드론_급증지표'] = df['잔액_카드론_B0M'] - df['잔액_카드론_B3M']
+
     # ▶ 정상청구 비율
-    df['정상청구_비율'] = safe_div(df['정상청구원금_B0M'], df['청구금액_B0'] + 1)
+    if '정상청구원금_B0M' in df.columns and '청구금액_B0' in df.columns:
+        df['정상청구_비율'] = safe_div(df['정상청구원금_B0M'], df['청구금액_B0'] + 1)
+
     # ▶ 정상청구 추세 변화량
-    df['정상청구_추세'] = df['정상청구원금_B0M'] - df['정상청구원금_B5M']
+    if '정상청구원금_B0M' in df.columns and '정상청구원금_B5M' in df.columns:
+        df['정상청구_추세'] = df['정상청구원금_B0M'] - df['정상청구원금_B5M']
+
     # ▶ 리볼빙 의존 비율
-    df['리볼빙_잔액비율'] = safe_div(df['잔액_리볼빙일시불이월_B0M'], df['RV_평균잔액_R3M'] + 1)
-    # ▶ 앱 이용 강도 (빈도성)
-    df['방문빈도_앱'] = safe_div(df['방문횟수_앱_B0M'], df['방문일수_앱_B0M'] + 1)
+    if '잔액_리볼빙일시불이월_B0M' in df.columns and 'RV_평균잔액_R3M' in df.columns:
+        df['리볼빙_잔액비율'] = safe_div(df['잔액_리볼빙일시불이월_B0M'], df['RV_평균잔액_R3M'] + 1)
+
+    # ▶ 앱 이용 강도
+    if '방문횟수_앱_B0M' in df.columns and '방문일수_앱_B0M' in df.columns:
+        df['방문빈도_앱'] = safe_div(df['방문횟수_앱_B0M'], df['방문일수_앱_B0M'] + 1)
+
     # ▶ 주 사용 카드 집중도
-    df['일시불_주사용카드집중도'] = safe_div(df['_1순위카드이용금액'], df['이용금액_일시불_R3M'] + 1)
+    if '_1순위카드이용금액' in df.columns and '이용금액_일시불_R3M' in df.columns:
+        df['일시불_주사용카드집중도'] = safe_div(df['_1순위카드이용금액'], df['이용금액_일시불_R3M'] + 1)
+
     return df
+
 
 def generate_vif_derived_features(df):
     """
     📌 VIF 상위 변수 기반 파생변수 생성 및 원본 변수 제거
-    - "_minus_", "_div_" 파생변수 생성
+    - "_minus_", "_div_" 파생변수 생성 (컬럼 존재하는 경우만)
     - 방문빈도 및 포인트 변화량 생성
     - 다중공선성 유발 원본 변수 제거
     """
     import numpy as np
 
-    # 파생변수 생성 리스트: (기준1, 기준2)
+    df = df.copy()
+
     diff_ratio_pairs = [
         ("이용건수_신판_R12M", "이용건수_신용_R12M"),
         ("이용건수_일시불_R12M", "이용건수_신판_R12M"),
@@ -96,30 +140,32 @@ def generate_vif_derived_features(df):
         ("잔액_카드론_B1M", "잔액_카드론_B2M"),
     ]
 
-    # 파생변수 생성
     for col1, col2 in diff_ratio_pairs:
-        df[f"{col1}_minus_{col2}"] = df[col1] - df[col2]
-        df[f"{col1}_div_{col2}"] = df[col1] / (df[col2].replace(0, np.nan) + 1e-6)
+        if col1 in df.columns and col2 in df.columns:
+            df[f"{col1}_minus_{col2}"] = df[col1] - df[col2]
+            df[f"{col1}_div_{col2}"] = df[col1] / (df[col2].replace(0, np.nan) + 1e-6)
 
-    # ✅ 기타 직접 생성 파생변수
+    # 기타 생성
     if "방문횟수_앱_B0M" in df.columns and "방문일수_앱_B0M" in df.columns:
         df["방문빈도_앱"] = df["방문횟수_앱_B0M"] / (df["방문일수_앱_B0M"].replace(0, np.nan) + 1e-6)
 
     if "포인트_마일리지_건별_R3M" in df.columns and "포인트_마일리지_건별_B0M" in df.columns:
         df["포인트건별_변화량"] = df["포인트_마일리지_건별_R3M"] - df["포인트_마일리지_건별_B0M"]
 
-    # ✅ 제거할 변수 목록
+    # 제거할 컬럼들 (존재하는 경우에만 제거)
     remove_cols = [
         "이용건수_신판_R12M", "이용건수_일시불_R12M",
         "잔액_신판ca최대한도소진율_r3m", "잔액_신판평균한도소진율_r3m",
         "잔액_신판ca최대한도소진율_r6m", "잔액_신판최대한도소진율_r3m",
-        "잔액_신판평균한도소진율_r6m", "잔액_신판ca평균한도소진율_r6m", "잔액_신판ca평균한도소진율_r3m",
+        "잔액_신판평균한도소진율_r6m", "잔액_신판ca평균한도소진율_r3m",
         "잔액_신판최대한도소진율_r6m", "방문일수_앱_B0M", "포인트_마일리지_건별_B0M",
         "잔액_카드론_B1M", "잔액_카드론_B2M", "방문횟수_PC_B0M", "카드이용한도금액_B1M", "이용카드수_체크_가족"
     ]
-    df.drop(columns=[col for col in remove_cols if col in df.columns], inplace=True)
+    remove_cols_existing = [col for col in remove_cols if col in df.columns]
+    df.drop(columns=remove_cols_existing, inplace=True)
 
     return df
+
 
 ab_feat = [
     '할부금액_3M_R12M', '이용금액_할부_무이자_R12M', '이용건수_할부_무이자_R12M', '정상입금원금_B0M',
@@ -168,7 +214,7 @@ pca_cols = [
     '잔액_리볼빙일시불이월_B0M', '잔액_일시불_B0M', '잔액_일시불_B1M', '잔액_일시불_B2M', '잔액_카드론_B0M', '잔액_카드론_B1M', '잔액_카드론_B2M', '잔액_카드론_B3M', '잔액_카드론_B4M', 
     '잔액_카드론_B5M', '정상청구원금_B0M', '정상청구원금_B2M', '정상청구원금_B5M', '청구금액_B0', '청구금액_R3M', '청구금액_R6M', '최종카드론_대출금액', 
     '카드론이용금액_누적', '평잔_RV일시불_3M', '평잔_RV일시불_6M', '평잔_일시불_3M', '평잔_일시불_6M', '평잔_카드론_3M', '평잔_카드론_6M', '평잔_할부_3M', 
-    '홈페이지_금융건수_R3M', '홈페이지_금융건수_R6M', '홈페이지_선결제건수_R3M', '홈페이지_선결제건수_R6M']
+    '홈페이지_금융건수_R3M', '홈페이지_금융건수_R6M', '홈페이지_선결제건수_R3M', '홈페이지_선결제건수_R6M', '잔액_신판평균한도소진율_r3m']
 
 top_cde = [
     '이용금액_일시불_R3M', '이용금액_R3M_신용체크', '정상입금원금_B0M', '이용금액_오프라인_R6M', '정상청구원금_B0M', '이용건수_신용_R6M', '이용금액_오프라인_R3M','이용건수_일시불_R12M',
@@ -228,15 +274,19 @@ baseline_feat = [
 
 
 
-selected_cols=(ab_feat + top_cde + pca_cols + baseline_feat)
+selected_cols=(ab_feat + top_cde + pca_cols)
 selected_cols = list(dict.fromkeys(selected_cols))
+
+selected_all=(ab_feat + top_cde + pca_cols + baseline_feat)
+selected_all = list(dict.fromkeys(selected_all))
 
 stage_feature_map = {
     "base": baseline_feat,
     "cd_base": cd_baseline,
     "cd" : cd_baseline,
     "ab" : ab_feat,
-    "e" : selected_cols
+    "e" : selected_all,
+    "abcd" : selected_cols
 }
 
 """
