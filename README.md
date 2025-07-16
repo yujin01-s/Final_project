@@ -111,3 +111,84 @@ VIF 계수 확인 후 10을 기준으로 크다면 제거 혹은 유지
 📌 **세그먼트별 RFM 특징 요약**
 - **A/B 세그먼트**: VIP 고객이 다수 분포
 - **E 세그먼트**: 이탈 우려/관심 필요 고객이 다수 분포
+
+
+---
+
+## 📐 모델링 파이프라인 요약
+
+### 1️⃣ Feature Engineering
+
+- 범주형 인코딩: `map_categorical_columns()`
+- 파생변수 생성
+  - `generate_rfm_features_original()`: RFM (Recency, Frequency, Monetary)
+  - `generate_common_derived_features()`: 잔액, 이용금액 기반 파생 비율
+- 최종 피처셋:  
+  `abcd_final_features + rfm_feature_cols + a_to_e_base_features`
+
+---
+
+### 2️⃣ 모델 실험 요약
+
+| 실험명 | 모델 | 특징 |
+|--------|------|------|
+| Baseline | XGBoost | 기본 파라미터, Softmax argmax |
+| Tuned | XGBoost (GPU) | Optuna 기반 튜닝 |
+| Tuned + Oversampling | XGBoost | Class imbalance 보정 (RandomOverSampler) |
+| Tuned + Threshold | XGBoost + Optuna | 클래스별 Threshold 조정 |
+
+---
+
+## ⚙️ 하이퍼파라미터 튜닝 (Optuna)
+
+```python
+params = {
+    'n_estimators': 591,
+    'max_depth': 10,
+    'learning_rate': 0.0898,
+    'subsample': 0.7064,
+    'colsample_bytree': 0.7095
+}
+```
+
+- 탐색 횟수: 50 trials
+- 평가 기준: `f1_weighted`
+- 교차검증: `StratifiedKFold(n_splits=3)`
+
+---
+
+## 🔧 Threshold 최적화 전략
+
+- 사용 도구: `Optuna`
+- 탐색 범위: 0.1 ~ 0.9
+- 예측 방식:
+  - **클래스별 확률이 임계값 이상일 때만 해당 클래스로 예측**
+  - 복수 클래스 통과 시, 확률이 가장 높은 클래스로 보정
+
+| 방식 | F1 Macro Score | 비고 |
+|------|----------------|------|
+| 기본 argmax | 0.74± | B/C 혼동 있음 |
+| Optuna Threshold | **0.79+** | C/D 분류 개선 효과 확인 |
+
+---
+
+## 📊 모델 성능 비교 (Fold 평균)
+
+| Segment | Precision | Recall |
+|---------|-----------|--------|
+| A | 0.81 | 0.83 |
+| B | 0.78 | 0.76 |
+| C | 0.72 | 0.70 |
+| D | 0.68 | 0.69 |
+| E | 0.91 | 0.89 |
+
+---
+
+## 💾 모델 저장 파일
+
+- `xgb_model.pkl`: 학습 모델
+- `scaler.pkl`: 표준화 스케일러
+- `le_y.pkl`: 클래스 인코더
+- `best_thresholds.pkl`: 클래스별 최적 Threshold 값
+
+---
